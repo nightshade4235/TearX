@@ -413,3 +413,6 @@ Before soldering, verify only these remaining points:
 7. The physical emergency-stop cuts motor power.
 
 Do not connect the battery until the power wiring, grounds, fuse/switch arrangement, and regulator outputs have been checked with a multimeter.
+
+
+# THE NEW FILE FOR CR8S AS OF NOW IS mensetmanus.py
