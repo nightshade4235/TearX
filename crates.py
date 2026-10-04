@@ -1,3 +1,15 @@
+#
+#   Filename: crates.py
+#   Authors: Joel Mathew Cinosh             | Avirbhav Dubey
+#   E-mails: jademountainacademy0@gmail.com | avirbhavdubey@gmail.com
+#   Iterpreter startup: python crates.py
+#   Brief: The main file that orchestrates the entire robot, the robot being CR8S, the patient collection robot.
+#   Date: 28-09-2026
+#   Version: 1.0.2a
+#   License: The MIT Lisence
+#   Github URL: https://github.com/nightshade4235/TearX/blob/main/crates.py
+#
+
 """
 crates.py  |  CR8S  |  TearX ST59
 Robot 1: patient collection, colour sorting, medkit delivery.
