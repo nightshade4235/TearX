@@ -746,6 +746,3 @@ can draw 2A+. Use a separate 5V supply rated for at least 3A.
 | DIST_TO_* macros | No | Measure on real field |
 
 Do not connect the battery until the power wiring, grounds, fuse/switch arrangement, and regulator outputs have been checked with a multimeter.
-
-
-# THE NEW FILE FOR CR8S AS OF NOW IS mensetmanus.py
