@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+#
+#   Filename: crates.py
+#   Authors: Joel Mathew Cinosh             | Avirbhav Dubey
+#   E-mails: jademountainacademy0@gmail.com | avirbhavdubey@gmail.com
+#   Iterpreter startup: python crates.py
+#   Brief: The main file that orchestrates the entire robot, the robot being CR8S, the patient collection robot.
+#   Date: 28-09-2026
+#   Version: 1.0.2a
+#   License: The MIT Lisence
+#   Github URL: https://github.com/nightshade4235/TearX/blob/main/crates.py
+#
+
 """Other Robot: black-disk image detection and distance parsing only.
 
 This module does NOT control motors, GPIO, servos, or navigation.
