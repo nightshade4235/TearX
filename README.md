@@ -414,7 +414,8 @@ Before soldering, verify only these remaining points:
 6. The 5 V servo supply is powerful enough.
 7. The physical emergency-stop cuts motor power.
 
-<br>
+---
+
 # newer wiring 
 
 # CR8S (Robot 1) — Wiring Reference
