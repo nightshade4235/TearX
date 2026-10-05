@@ -1,4 +1,4 @@
-![TearX](assets/tearx.png)
+![TearX](assets/tearx.jpeg)
 
 # CODE FOR THE ROBOTS
 
