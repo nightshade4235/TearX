@@ -317,16 +317,45 @@ class ESP32Link:
             import serial
             self.port = serial.Serial(UART_DEVICE, UART_BAUD, timeout=UART_ACK_TIMEOUT)
 
-    def send_motor_command(self, left: float, right: float):
+    def send_motor_command(self, left: float, right: float,
+                           duration_ms: int = 100,
+                           distance_mm: int = 0):
+        """Send one short Pi-planned velocity action to the ESP32.
+
+        The Pi chooses direction, speed, duration, and planned distance. The
+        ESP32 only translates the direction into motor outputs and runs it
+        for duration_ms.
+        """
         self.sequence += 1
-        # The ESP32 should later define the exact four-wheel interpretation.
-        packet = frame_message("M", self.sequence, left, left, right, right)
+        left = max(-1.0, min(1.0, float(left)))
+        right = max(-1.0, min(1.0, float(right)))
+        if abs(left) < 0.02 and abs(right) < 0.02:
+            kind = "S"
+            packet = frame_message(kind, self.sequence)
+        else:
+            if left >= 0 and right >= 0:
+                direction = "F"
+            elif left <= 0 and right <= 0:
+                direction = "B"
+            elif left < 0 and right > 0:
+                direction = "L"
+            else:
+                direction = "R"
+            speed = max(abs(left), abs(right))
+            packet = frame_message(
+                "V", self.sequence, direction, f"{speed:.3f}",
+                int(duration_ms), int(distance_mm)
+            )
         if self.port:
             self.port.write(packet)
         print(f"UART TX {packet.decode().strip()}")
 
     def stop(self):
-        self.send_motor_command(0, 0)
+        self.sequence += 1
+        packet = frame_message("S", self.sequence)
+        if self.port:
+            self.port.write(packet)
+        print(f"UART TX {packet.decode().strip()}")
 
     def read_encoder_packet(self) -> Optional[EncoderPacket]:
         if self.dry_run or not self.port:
@@ -525,4 +554,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-  
