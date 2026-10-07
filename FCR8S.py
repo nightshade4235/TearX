@@ -302,10 +302,14 @@ class DrumStepper:
 @dataclass
 class EncoderPacket:
     sequence: int
-    lf: int
-    lr: int
-    rf: int
-    rr: int
+    lf_c1: int
+    lf_c2: int
+    lr_c1: int
+    lr_c2: int
+    rf_c1: int
+    rf_c2: int
+    rr_c1: int
+    rr_c2: int
 
 
 class ESP32Link:
@@ -366,12 +370,13 @@ class ESP32Link:
         try:
             body = line[1:-1]
             fields = body.split(",")
-            if len(fields) != 7 or fields[0] != "E":
+            # E,sequence,LF_C1,LF_C2,LR_C1,LR_C2,RF_C1,RF_C2,RR_C1,RR_C2,checksum
+            if len(fields) != 11 or fields[0] != "E":
                 return None
             expected = checksum(",".join(fields[:-1]))
             if fields[-1].upper() != expected:
                 return None
-            return EncoderPacket(*(int(x) for x in fields[1:5]))
+            return EncoderPacket(*(int(x) for x in fields[1:10]))
         except (ValueError, IndexError):
             return None
 
