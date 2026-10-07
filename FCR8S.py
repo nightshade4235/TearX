@@ -44,6 +44,8 @@ SWEEPER_SERVO = 13           # physical pin 33, MG90S
 TRAPDOOR_1_SERVO = 16        # physical pin 36, SG90
 TRAPDOOR_2_SERVO = 18        # physical pin 12, SG90
 KIT_SERVO = 19               # physical pin 35, MG995
+EXTRA_COMPARTMENT_1_SERVO = 24  # physical pin 18; confirm mechanism
+EXTRA_COMPARTMENT_2_SERVO = 25  # physical pin 22; confirm mechanism
 
 STEPPER_IN1 = 4              # physical pin 7
 STEPPER_IN2 = 5              # physical pin 29
@@ -80,10 +82,16 @@ SERVO_ANGLES = {
     "ramp_down": None,
     "sweeper_home": None,
     "sweeper_in": None,
-    "trapdoor_closed": None,
-    "trapdoor_open": None,
+    "trapdoor_1_closed": None,
+    "trapdoor_1_open": None,
+    "trapdoor_2_closed": None,
+    "trapdoor_2_open": None,
     "kit_closed": None,
     "kit_open": None,
+    "extra_compartment_1_closed": None,
+    "extra_compartment_1_open": None,
+    "extra_compartment_2_closed": None,
+    "extra_compartment_2_open": None,
 }
 
 # Colour thresholds are starting points only. Calibrate from real samples.
@@ -213,6 +221,8 @@ class ServoBank:
                 "trapdoor_1": TRAPDOOR_1_SERVO,
                 "trapdoor_2": TRAPDOOR_2_SERVO,
                 "kit": KIT_SERVO,
+                "extra_compartment_1": EXTRA_COMPARTMENT_1_SERVO,
+                "extra_compartment_2": EXTRA_COMPARTMENT_2_SERVO,
             }.items():
                 self.servos[name] = AngularServo(
                     pin, min_angle=0, max_angle=180,
@@ -234,16 +244,24 @@ class ServoBank:
     def sweep_home(self): self.move("sweeper", "sweeper_home")
 
     def trapdoors_open(self):
-        self.move("trapdoor_1", "trapdoor_open")
-        self.move("trapdoor_2", "trapdoor_open")
+        self.move("trapdoor_1", "trapdoor_1_open")
+        self.move("trapdoor_2", "trapdoor_2_open")
 
     def trapdoors_close(self):
-        self.move("trapdoor_1", "trapdoor_closed")
-        self.move("trapdoor_2", "trapdoor_closed")
+        self.move("trapdoor_1", "trapdoor_1_closed")
+        self.move("trapdoor_2", "trapdoor_2_closed")
 
     def release_kits(self):
         self.move("kit", "kit_open")
         self.move("kit", "kit_closed")
+
+    def release_extra_compartment_1(self):
+        self.move("extra_compartment_1", "extra_compartment_1_open")
+        self.move("extra_compartment_1", "extra_compartment_1_closed")
+
+    def release_extra_compartment_2(self):
+        self.move("extra_compartment_2", "extra_compartment_2_open")
+        self.move("extra_compartment_2", "extra_compartment_2_closed")
 
     def close(self):
         for servo in self.servos.values():
