@@ -1,126 +1,72 @@
-# Patient Robot — Complete Workings and Wiring Guide
+# Robot M — Revised Raspberry Pi 4 + ESP32-S3 Wiring Guide
 
-**Project:** Robotics for Good Youth Challenge
-**Robot:** Patient/medical-kit robot
-**Primary architecture:** Raspberry Pi 4 master + ESP32 motor slave
-**Status:** Assembly and calibration reference; verify all physical PCB assignments before final soldering.
+**Revision:** 07 October 2026
+**Controller:** Raspberry Pi 4 master + ESP32-S3-DevKitC-1 motor/encoder slave
+**Motor drivers:** Two L298N modules
+**Reference:** `robot-m-schematic.pdf`, Rev A, 06 October 2026
 
-> This document describes the intended working architecture. The Raspberry Pi makes all navigation decisions. The ESP32 only receives Pi commands, converts them into motor-driver signals, runs the requested action, and reports encoder readings back to the Pi.
-
----
-
-## 1. What the robot must do
-
-The patient robot is intended to:
-
-- Collect 12 patients.
-
-- Collect/manage 10 medical kits according to the game plan.
-
-- Store patients in the drum compartments.
-
-- Use the IR array to detect black tape/landmarks.
-
-- Use the ToF sensor for approximate forward distance and wall/object proximity.
-
-- Use the camera for patient alignment/orientation once the robot leaves the starting zone.
-
-- Use the colour sensor only as a close-range colour confirmation if it can see the patient.
-
-- Use servos for the ramp, sweeper, trapdoors, and medical-kit release.
-
-- Use a stepper motor for the drum.
-
-- Use four N20 encoder motors controlled by the ESP32.
-
-The route is hardcoded in the Pi state machine. Exact route distances and timings must be measured on the real board.
+> The Raspberry Pi sensor, servo, and stepper wiring remains the previous arrangement. The ESP32 motor side is changed to the new schematic: two L298N boards, shared left/right PWM and direction signals, and eight separate encoder signals.
 
 ---
 
-## 2. Division of responsibility
+## 1. System responsibilities
 
-### Raspberry Pi 4 — master
+### Raspberry Pi 4
 
-The Pi handles:
+The Pi manages:
 
-- IR sensor input.
+- IR array.
 
-- VL53L0X ToF input.
+- VL53L0X ToF.
 
-- MPU-6050 input.
+- MPU-6050.
 
-- TCS34725 input.
+- TCS34725/CJMCU-34725 on separate software I2C.
 
-- Camera input and patient alignment.
+- Camera.
 
-- Navigation state machine.
+- Navigation and route decisions.
 
-- Route decisions.
+- Camera patient alignment.
 
-- Direction selection.
-
-- Distance and turn calculations.
-
-- Duration calculation for every motor action.
-
-- Five servos.
+- Servo mechanisms.
 
 - 28BYJ-48 drum stepper through ULN2003.
 
-- UART commands to the ESP32.
+- UART commands to the ESP32-S3.
 
-- Encoder packets returned by the ESP32.
+- Encoder data received from the ESP32-S3.
 
-### ESP32 — motor slave
+### ESP32-S3
 
-The ESP32 handles only low-level motor execution:
+The ESP32-S3 manages:
 
-1. Receive a complete UART command from the Pi.
+- UART packet reception and checksum validation.
 
-1. Validate its checksum.
+- L298N input signals.
 
-1. Parse direction, speed, duration, and distance fields.
+- Four motor outputs through two L298N boards.
 
-1. Convert the direction into four TB6612 motor outputs.
+- Eight encoder input signals.
 
-1. Run the motors for the Pi-provided duration.
+- Timed motor execution requested by the Pi.
 
-1. Stop when the duration expires or when a stop command arrives.
+- Encoder report packets back to the Pi.
 
-1. Count encoder pulses.
-
-1. Return encoder counts and status to the Pi.
-
-The ESP32 does **not**:
-
-- Choose the route.
-
-- Search for patients.
-
-- Decide where to turn.
-
-- Calculate the route distance.
-
-- Calculate the turn angle.
-
-- Interpret the ToF, IR, colour, or camera sensors.
-
-- Decide when a patient has been collected.
+The ESP32-S3 does not choose the route or calculate navigation distance. The Pi supplies direction, speed, duration, and planned distance.
 
 ---
 
-## 3. Raspberry Pi GPIO map
+## 2. Raspberry Pi 4 GPIO table
 
-Pi software uses **BCM GPIO numbers**. Physical wiring uses **physical pin numbers**.
+Pi software uses **BCM GPIO numbers**. Wiring uses **physical pin numbers**.
 
-### Pi functions
-
-| Function | BCM GPIO | Physical pin | Connection |
+| Pi function | BCM GPIO | Physical pin | Connection |
 | --- | --- | --- | --- |
 | Hardware I2C SDA | GPIO2 | 3 | VL53L0X + MPU-6050 SDA |
 | Hardware I2C SCL | GPIO3 | 5 | VL53L0X + MPU-6050 SCL |
-| UART TX | GPIO14 | 8 | ESP32 RX2 / GPIO16 |
-| UART RX | GPIO15 | 10 | ESP32 TX2 / GPIO17 |
+| UART TX | GPIO14 | 8 | ESP32-S3 UART RX |
+| UART RX | GPIO15 | 10 | ESP32-S3 UART TX |
 | Software I2C SDA | GPIO17 | 11 | TCS34725 SDA |
 | Trapdoor 2 servo | GPIO18 | 12 | SG90 #2 signal |
 | IR S2 | GPIO27 | 13 | IR array S2 |
@@ -135,28 +81,26 @@ Pi software uses **BCM GPIO numbers**. Physical wiring uses **physical pin numbe
 | Sweeper servo | GPIO13 | 33 | MG90S signal |
 | Medical-kit servo | GPIO19 | 35 | MG995 signal |
 | Trapdoor 1 servo | GPIO16 | 36 | SG90 #1 signal |
-| Reserved/spare | GPIO21 | 40 | Future E-stop or spare |
+| Reserved/spare | GPIO21 | 40 | Leave unused |
 
-### Pi power pins
+### Pi power and ground
 
-| Physical pin | Function |
-| --- | --- |
-| 1 | 3.3 V sensor rail |
-| 6 | Common ground |
-| 17 | Optional additional 3.3 V |
-| 26 | Optional additional ground |
-
-> The custom PCB rails are only parallel connection points. They do not regulate voltage.
+```
+Physical pin 1  -> 3.3 V sensor rail
+Physical pin 6  -> common GND
+Physical pin 17 -> optional additional 3.3 V
+Physical pin 26 -> optional additional GND
+```
 
 ---
 
-## 4. Raspberry Pi sensors
+## 3. Raspberry Pi sensor wiring
 
-### 4.1 IR array
+### IR array
 
-Only one IR array is used. Only S2, S3, and S4 are used by the software.
+Use only one IR array and only S2/S3/S4:
 
-| IR pin | Pi physical pin | Pi BCM GPIO |
+| IR signal | Pi physical pin | Pi BCM |
 | --- | --- | --- |
 | S2 | 13 | GPIO27 |
 | S3 | 15 | GPIO22 |
@@ -181,62 +125,48 @@ Current interpretation:
 0 = white/not active
 ```
 
-The physical left/right orientation must be verified:
+### VL53L0X on hardware I2C bus 1
 
 ```
-S2 = left
-S3 = centre/forward
-S4 = right
-```
-
-### 4.2 VL53L0X ToF
-
-Use one VL53L0X on hardware I2C bus 1.
-
-```
-VL53L0X VIN/VCC -> Pi 3.3 V, physical pin 1
-VL53L0X GND     -> Pi GND, physical pin 6
-VL53L0X SDA     -> Pi SDA, physical pin 3 / GPIO2
-VL53L0X SCL     -> Pi SCL, physical pin 5 / GPIO3
+VIN/VCC -> Pi pin 1 / 3.3 V
+GND     -> Pi pin 6 / GND
+SDA     -> Pi pin 3 / GPIO2
+SCL     -> Pi pin 5 / GPIO3
 ```
 
 Expected address:
 
 ```
-0x29 on I2C bus 1
+0x29 on bus 1
 ```
 
-The ToF provides approximate distance in millimetres. It is used to detect that the robot is close to an object/wall. The practical minimum reading may be around 30–40 mm rather than zero.
+Only one VL53L0X should be connected because the modules share address `0x29` and no confirmed XSHUT wiring is available.
 
-### 4.3 MPU-6050
+### MPU-6050 on hardware I2C bus 1
 
 ```
-MPU VCC -> Pi 3.3 V, physical pin 1
-MPU GND -> Pi GND, physical pin 6
-MPU SDA -> Pi SDA, physical pin 3 / GPIO2
-MPU SCL -> Pi SCL, physical pin 5 / GPIO3
-MPU AD0 -> GND if using address 0x68
+VCC -> Pi pin 1 / 3.3 V
+GND -> Pi pin 6 / GND
+SDA -> Pi pin 3 / GPIO2
+SCL -> Pi pin 5 / GPIO3
+AD0 -> GND for address 0x68
 ```
 
 Expected address:
 
 ```
-0x68 on I2C bus 1
+0x68 on bus 1
 ```
 
-The sensor must be woken from sleep before reading its registers. It can provide gyro/acceleration data, but heading and turn calibration are not complete yet.
-
-### 4.4 TCS34725/CJMCU-34725 colour sensor
-
-The colour sensor normally uses address `0x29`, which conflicts with the VL53L0X. It therefore uses a separate software I2C bus.
+### TCS34725/CJMCU-34725 on software I2C bus 3
 
 ```
-TCS VCC -> Pi 3.3 V, physical pin 1
-TCS GND -> Pi GND, physical pin 6
-TCS SDA -> Pi GPIO17, physical pin 11
-TCS SCL -> Pi GPIO26, physical pin 37
-TCS INT -> leave disconnected
-TCS LED -> leave disconnected initially
+VCC -> Pi pin 1 / 3.3 V
+GND -> Pi pin 6 / GND
+SDA -> Pi pin 11 / GPIO17
+SCL -> Pi pin 37 / GPIO26
+INT -> disconnected
+LED -> disconnected initially
 ```
 
 Add to `/boot/firmware/config.txt`:
@@ -245,90 +175,39 @@ Add to `/boot/firmware/config.txt`:
 dtoverlay=i2c-gpio,bus=3,i2c_gpio_sda=17,i2c_gpio_scl=26
 ```
 
-After reboot:
-
-```bash
-ls /dev/i2c-*
-sudo i2cdetect -y 1
-sudo i2cdetect -y 3
-```
-
 Expected:
 
 ```
-bus 1 -> 0x29 VL53L0X, 0x68 MPU-6050
-bus 3 -> 0x29 TCS34725
+bus 3 -> 0x29
 ```
 
-The colour sensor is a short-range point sensor. It cannot search the board like a camera. It is only useful when the patient is close and actually within its small sensing area.
-
-The camera should be the primary patient-alignment sensor. The colour sensor may provide close-range confirmation if its mounting allows it to see the patient.
-
-### 4.5 Pi Camera
-
-Connect the official Raspberry Pi Camera V2 to the Pi CSI connector.
-
-Test it with:
-
-```bash
-rpicam-hello --list-cameras
-rpicam-hello --timeout 0
-```
-
-Planned use:
-
-- Camera inactive or ignored in the starting zone.
-
-- IR detects the starting landmark.
-
-- Pi transitions to active navigation.
-
-- Camera detects the patient and estimates horizontal position.
-
-- Negative signed error means patient is left.
-
-- Positive signed error means patient is right.
-
-- Pi turns until the patient is centred.
-
-- ToF handles approximate approach distance.
+The colour sensor is a short-range point sensor. The camera should be used for patient position/orientation; the colour sensor can read the patient after it rolls onto the ramp-mounted sensor.
 
 ---
 
-## 5. Pi actuators
+## 4. Raspberry Pi actuators
 
-### 5.1 Five servos
+### Five servos
 
-| Mechanism | Servo | Signal pin | Power |
+| Mechanism | Servo | Pi signal | Power |
 | --- | --- | --- | --- |
-| Ramp | MG995 | physical 32 / GPIO12 | separate regulated 5 V |
-| Sweeper | MG90S | physical 33 / GPIO13 | separate regulated 5 V |
-| Trapdoor 1 | SG90 | physical 36 / GPIO16 | separate regulated 5 V |
-| Trapdoor 2 | SG90 | physical 12 / GPIO18 | separate regulated 5 V |
-| Medical-kit release | MG995 | physical 35 / GPIO19 | separate regulated 5 V |
+| Ramp | MG995 | pin 32 / GPIO12 | separate regulated 5 V |
+| Sweeper | MG90S | pin 33 / GPIO13 | separate regulated 5 V |
+| Trapdoor 1 | SG90 | pin 36 / GPIO16 | separate regulated 5 V |
+| Trapdoor 2 | SG90 | pin 12 / GPIO18 | separate regulated 5 V |
+| Medical-kit release | MG995 | pin 35 / GPIO19 | separate regulated 5 V |
 
-All servo grounds must connect to the common ground. Do not power a servo from a Pi GPIO pin.
-
-The two trapdoors are commanded together.
-
-Servo angles remain calibration values:
-
-```python
-ramp_up
-ramp_down
-sweeper_home
-sweeper_in
-trapdoor_closed
-trapdoor_open
-kit_closed
-kit_open
+```
+Servo VCC -> separate regulated 5 V supply
+Servo GND -> servo supply GND/common GND
+Pi GND    -> same common GND
 ```
 
-Do not command live servos until mechanical limits have been checked by hand.
+Never power servos from Pi GPIO pins.
 
-### 5.2 28BYJ-48 drum stepper and ULN2003
+### 28BYJ-48 and ULN2003
 
-| ULN2003 input | Pi physical pin | Pi BCM GPIO |
+| ULN2003 signal | Pi physical pin | Pi BCM |
 | --- | --- | --- |
 | IN1 | 7 | GPIO4 |
 | IN2 | 29 | GPIO5 |
@@ -336,11 +215,8 @@ Do not command live servos until mechanical limits have been checked by hand.
 | IN4 | 38 | GPIO20 |
 | VCC | separate regulated 5 V | — |
 | GND | common GND | — |
-| Motor socket | 28BYJ-48 plug | — |
 
-The ULN2003 board normally does not use a TB6612-style `STBY` pin. It uses four input signals.
-
-Drum slots:
+Drum mapping:
 
 ```
 Slot 1 = Y1
@@ -349,40 +225,112 @@ Slot 3 = Y2
 Slot 4 = green
 ```
 
-The drum starts physically at slot 1/Y1. The intended software movement is:
+---
 
-```python
-delta = (target_slot - current_slot) % 4
+## 5. ESP32-S3 motor-controller map
+
+The new schematic uses two L298N modules.
+
+### Left L298N — U3
+
+| ESP32-S3 GPIO | Net/function | L298N connection |
+| --- | --- | --- |
+| GPIO4 | L_PWM | ENA + ENB tied together |
+| GPIO5 | L_DIR1 | IN1 + IN3 tied together |
+| GPIO6 | L_DIR2 | IN2 + IN4 tied together |
+
+Motor outputs:
+
+```
+OUT1 + OUT2 -> M1 left front
+OUT3 + OUT4 -> M2 left rear
 ```
 
-Required measurement:
+### Right L298N — U4
+
+| ESP32-S3 GPIO | Net/function | L298N connection |
+| --- | --- | --- |
+| GPIO7 | R_PWM | ENA + ENB tied together |
+| GPIO8 | R_DIR1 | IN1 + IN3 tied together |
+| GPIO9 | R_DIR2 | IN2 + IN4 tied together |
+
+Motor outputs:
 
 ```
-steps per drum slot
-coil sequence/direction
-whether the drum must be de-energised after movement
+OUT1 + OUT2 -> M3 right front
+OUT3 + OUT4 -> M4 right rear
+```
+
+### Driver jumper requirements
+
+The schematic specifies:
+
+```
+Remove 5V-EN jumper on both L298N modules.
+Remove ENA jumper on both modules.
+Remove ENB jumper on both modules.
+```
+
+The ESP32-S3 must provide PWM to the enable inputs.
+
+### Motor polarity
+
+The schematic labels each motor wire:
+
+```
+M1 red / M2 white
+```
+
+If a motor rotates in the wrong direction, power off before swapping its output pair or change the software inversion setting.
+
+---
+
+## 6. ESP32-S3 encoder wiring
+
+Keep all encoder C1/C2 signals separate.
+
+| Encoder | C1 signal | C2 signal |
+| --- | --- | --- |
+| Left front E1 | GPIO10 | GPIO11 |
+| Left rear E2 | GPIO12 | GPIO13 |
+| Right front E3 | GPIO14 | GPIO15 |
+| Right rear E4 | GPIO16 | GPIO17 |
+
+For every encoder connector:
+
+```
+VCC (black) -> +3V3_ENC
+GND (blue)  -> common GND
+C1 (green)  -> GPIO listed above
+C2 (yellow) -> GPIO listed above
+```
+
+> Confirm the encoder output voltage. The ESP32-S3 GPIOs are not 5 V tolerant. If an encoder produces 5 V push-pull outputs, use a suitable level translator. If it is an open-collector output, use confirmed 3.3 V pull-ups.
+
+The ESP32-S3 reports all eight counts to the Pi:
+
+```
+<E,sequence,LF_C1,LF_C2,LR_C1,LR_C2,RF_C1,RF_C2,RR_C1,RR_C2,checksum>
 ```
 
 ---
 
-## 6. ESP32 proposed GPIO map
+## 7. ESP32-S3 UART wiring
 
-> These are the proposed assignments from the current firmware. The actual Arduino/PCB wiring must take priority. Confirm the bottom wiring comments from the team before soldering.
+The schematic does not show UART pins. The current firmware uses these **proposed pins**:
 
-### 6.1 Pi UART connection
-
-| Signal | ESP32 GPIO | Pi connection |
+| UART signal | ESP32-S3 | Raspberry Pi |
 | --- | --- | --- |
-| RX2 | GPIO16 | Pi physical pin 8 / GPIO14 TX |
-| TX2 | GPIO17 | Pi physical pin 10 / GPIO15 RX |
-| GND | GND | Pi physical pin 6 |
+| RX | GPIO18 | Pi TX, physical pin 8 / GPIO14 |
+| TX | GPIO21 | Pi RX, physical pin 10 / GPIO15 |
+| GND | GND | Pi GND, physical pin 6 |
 
-UART is crossed:
+Cross the signals:
 
 ```
-Pi TX -> ESP32 RX GPIO16
-Pi RX -> ESP32 TX GPIO17
-Pi GND -> ESP32 GND
+Pi TX  -> ESP32-S3 GPIO18 RX
+Pi RX  <- ESP32-S3 GPIO21 TX
+Pi GND <-> ESP32-S3 GND
 ```
 
 Use:
@@ -391,503 +339,181 @@ Use:
 115200 baud, 8 data bits, no parity, 1 stop bit
 ```
 
-### 6.2 TB6612FNG board 1
+Before wiring, confirm GPIO18 and GPIO21 are available on the actual ESP32-S3 board. If different UART pins are chosen, change these firmware macros:
 
-| TB6612 signal | ESP32 GPIO |
-| --- | --- |
-| PWMA / Motor 1 PWM | GPIO13 |
-| AIN1 / Motor 1 direction | GPIO14 |
-| AIN2 / Motor 1 direction | GPIO18 |
-| PWMB / Motor 2 PWM | GPIO19 |
-| BIN1 / Motor 2 direction | GPIO21 |
-| BIN2 / Motor 2 direction | GPIO22 |
-| STBY | GPIO27 |
-
-Motor screw terminals:
-
-```
-A01 + A02 -> Motor 1 two motor wires
-B01 + B02 -> Motor 2 two motor wires
+```cpp
+const int UART_RX_PIN = 18;
+const int UART_TX_PIN = 21;
 ```
 
-### 6.3 TB6612FNG board 2
-
-| TB6612 signal | ESP32 GPIO |
-| --- | --- |
-| PWMA / Motor 3 PWM | GPIO23 |
-| AIN1 / Motor 3 direction | GPIO12 |
-| AIN2 / Motor 3 direction | GPIO15 |
-| PWMB / Motor 4 PWM | GPIO5 |
-| BIN1 / Motor 4 direction | GPIO2 |
-| BIN2 / Motor 4 direction | GPIO4 |
-| STBY | GPIO27 |
-
-Motor screw terminals:
-
-```
-A01 + A02 -> Motor 3 two motor wires
-B01 + B02 -> Motor 4 two motor wires
-```
-
-One motor must use one complete output pair. Do not split one motor across channels.
-
-Both TB6612 boards are assumed to share `STBY` on GPIO27. If the PCB already ties `STBY` to a logic rail, the firmware must be changed accordingly.
-
-### 6.4 Encoder connections
-
-| Motor | Encoder A | Encoder B |
-| --- | --- | --- |
-| Motor 1 | ESP32 GPIO34 | ESP32 GPIO35 |
-| Motor 2 | ESP32 GPIO36 | ESP32 GPIO39 |
-| Motor 3 | ESP32 GPIO32 | ESP32 GPIO33 |
-| Motor 4 | ESP32 GPIO25 | ESP32 GPIO26 |
-
-For every encoder:
-
-```
-Encoder VCC -> confirmed encoder supply
-Encoder GND -> common ground
-Encoder A   -> assigned A GPIO
-Encoder B   -> assigned B GPIO
-```
-
-GPIO34, GPIO35, GPIO36, and GPIO39 are input-only and do not have normal internal pull-ups. Encoder outputs must be 3.3 V safe and must have suitable external pull-ups if required.
+The Pi pins remain unchanged.
 
 ---
 
-## 7. Power distribution
+## 8. Power wiring
 
-The battery is a 12.8 V LiFePO4 4S1P pack.
-
-The battery must not be connected directly to:
+The schematic shows these rails:
 
 ```
-Raspberry Pi GPIO
-ESP32 3.3 V pin
-sensors
-servos
-ULN2003 VCC
++12V_MOTOR -> L298N motor supply
++5V_LOGIC  -> L298N logic supply and ESP32-S3 5V input
++3V3_ENC   -> encoder VCC
+GND        -> common ground distribution point
 ```
 
-Required regulated rails:
+Battery path:
 
 ```
-12.8 V battery
-    -> regulator for Raspberry Pi input
-    -> regulator for servo 5 V rail
-    -> regulator for stepper 5 V rail
-    -> appropriate motor rail for TB6612 VM
-    -> regulated logic rail as required
+12–14 V battery positive
+    -> fuse close to battery
+    -> main switch
+    -> buck converter inputs
 ```
 
-Required common ground:
+The schematic includes:
 
 ```
+U1 buck -> +12V_MOTOR target
+U2 buck -> regulated +5V_LOGIC
+```
+
+Confirm that the 12 V buck has sufficient input headroom. A 12.8 V battery may not provide enough headroom for a true regulated 12 V output as it discharges; a buck-boost converter may be required.
+
+All grounds return to the common battery-negative distribution point:
+
+```
+Battery negative
 Pi GND
-ESP32 GND
-TB6612 GND
-encoder GND
-sensor GND
-servo supply GND
-stepper supply GND
+ESP32-S3 GND
+L298N U3 GND
+L298N U4 GND
+Encoder GND
+Sensor GND
+Servo supply GND
+Stepper supply GND
 ```
 
-The motor supply must connect to the TB6612 motor-voltage input, not the ESP32 3.3 V rail.
-
-Measure each rail with a multimeter before connecting loads:
+Add/verify local capacitors:
 
 ```
-3.3 V sensor rail -> approximately 3.3 V
-5 V servo rail   -> approximately 5 V
-5 V stepper rail -> approximately 5 V
-motor rail       -> appropriate voltage for N20 motors
+470 uF near each L298N motor supply
+100 uF near the logic supply
+100 nF ceramic bypass at drivers and encoder supplies
 ```
 
-A physical emergency stop should remove motor/actuator power. A software stop is not a substitute for a physical emergency stop.
+The L298N can dissipate significant heat. Check driver temperature and motor voltage/current limits.
 
 ---
 
-## 8. Pi-to-ESP32 command protocol
+## 9. UART command responsibility
 
-The Pi performs all navigation calculations and sends a complete action.
-
-### Command format
+The Pi sends complete movement actions:
 
 ```
-<V,sequence,direction,speed,duration_ms,distance_mm,checksum>\n
+<V,sequence,direction,speed,duration_ms,distance_mm,checksum>
 ```
 
-The checksum is an XOR of every character in the body before the final checksum field.
-
-Example body:
-
-```
-V,1,F,0.30,1500,420
-```
-
-The final packet is:
-
-```
-<V,1,F,0.30,1500,420,XX>
-```
-
-where `XX` is calculated by the Pi.
-
-### Directions
+Directions:
 
 ```
 F = forward
 B = backward
-L = in-place left turn
-R = in-place right turn
+L = left turn
+R = right turn
 S = stop
 ```
 
-### Meaning of fields
+The Pi calculates the route, distance, speed, and duration. The ESP32-S3 translates the command into left/right L298N signals.
 
-| Field | Meaning |
-| --- | --- |
-| `V` | velocity/action packet |
-| `sequence` | packet number |
-| `direction` | F/B/L/R/S |
-| `speed` | normalized motor command, 0.0 to 1.0 |
-| `duration_ms` | exact run time calculated by Pi |
-| `distance_mm` | Pi’s planned distance; ESP32 echoes/accepts it but does not calculate with it |
-| `checksum` | XOR validation field |
-
-### Responses
-
-Accepted:
+ESP32-S3 replies:
 
 ```
-<A,1,START,checksum>
+<A,sequence,START,checksum>
+<C,sequence,DONE,checksum>
+<E,sequence,LF_C1,LF_C2,LR_C1,LR_C2,RF_C1,RF_C2,RR_C1,RR_C2,checksum>
+<F,sequence,reason,checksum>
 ```
-
-Completed:
-
-```
-<C,1,DONE,checksum>
-```
-
-Encoder report:
-
-```
-<E,sequence,motor1_count,motor2_count,motor3_count,motor4_count,checksum>
-```
-
-Fault examples:
-
-```
-<F,1,BAD_VALUE,checksum>
-<F,1,BAD_DIRECTION,checksum>
-<F,1,CHECKSUM,checksum>
-```
-
-The ESP32 must stop when it receives a stop command. A raw command timeout may also be used as a safety fallback.
 
 ---
 
-## 9. How one movement works
+## 10. Test order
 
-Example: the Pi wants to move forward 420 mm.
+1. Keep battery and motor power disconnected.
 
-1. Pi reads the route state.
+1. Check all rails for shorts.
 
-1. Pi calculates the required speed and duration.
+1. Measure `+5V_LOGIC`.
 
-1. Pi sends a packet such as:
+1. Measure `+3V3_ENC`.
 
-   ```
-   V,1,F,0.30,1500,420
-   ```
+1. Confirm ESP32-S3 powers from the correct 5 V input.
 
-1. ESP32 verifies the checksum.
+1. Upload the ESP32-S3 firmware.
 
-1. ESP32 maps `F` to:
+1. Confirm the USB debug message.
 
-   ```
-   left motors = forward
-   right motors = forward
-   ```
+1. Confirm UART pin choice physically.
 
-1. ESP32 applies PWM corresponding to `0.30`.
+1. Connect Pi TX/RX crossed and common GND.
 
-1. ESP32 runs for 1500 ms.
+1. Test `PING`/`PONG`.
 
-1. ESP32 stops all motors.
+1. Connect one L298N logic supply.
 
-1. ESP32 sends `DONE`.
+1. Keep enable PWM low and test one motor with the wheel lifted.
 
-1. ESP32 continues sending encoder counts.
+1. Test forward and reverse.
 
-1. Pi uses returned encoder counts for logging, calibration, and later control decisions.
+1. Add the other motors one at a time.
 
-For a right turn:
+1. Connect encoder VCC/GND only after voltage compatibility is confirmed.
 
-```
-V,2,R,0.25,700,0
-```
+1. Connect C1/C2 one motor at a time.
 
-The ESP32 maps this to:
+1. Confirm the encoder report changes.
 
-```
-left motors = forward
-right motors = reverse
-```
-
-The Pi remains responsible for deciding that 700 ms is the correct turn duration.
-
----
-
-## 10. Robot operating sequence
-
-The final state machine should follow the confirmed competition route rather than inventing distances.
-
-General sequence:
-
-1. Place the drum physically at Y1/slot 1.
-
-1. Ensure ramp, sweeper, trapdoors, and kit release are in safe starting positions.
-
-1. Start the Pi program headlessly.
-
-1. Pi commands the robot forward.
-
-1. IR S2/S3/S4 detect the starting black landmark.
-
-1. Pi stops or changes state after confirming the landmark.
-
-1. Camera-guided patient alignment becomes active.
-
-1. Camera centres the patient horizontally.
-
-1. ToF confirms approximate close distance.
-
-1. Ramp lifts.
-
-1. Sweeper moves inward.
-
-1. Patient enters the mechanism.
-
-1. Patient colour is confirmed if the colour sensor can see it.
-
-1. Pi chooses the correct drum slot.
-
-1. Drum rotates using the measured slot step count.
-
-1. Process repeats for the remaining patients.
-
-1. IR/ToF landmarks cause route transitions.
-
-1. Trapdoors release the appropriate patient groups.
-
-1. Medical-kit servo releases the required kits.
-
-1. Pi returns the robot and finishes in a stopped state.
-
-The exact route transitions, turning directions, and measured distances remain calibration work.
-
----
-
-## 11. Testing order
-
-### Sensor-only test
-
-Use:
+1. Run the Pi sensor wizard separately:
 
 ```bash
 python3 patient_sensor_test.py --wizard
 ```
 
-The wizard tests one item at a time:
+1. Test the stepper unloaded.
 
-1. I2C scan.
+1. Test servos one at a time.
 
-1. MPU-6050.
-
-1. VL53L0X.
-
-1. TCS34725.
-
-1. IR array.
-
-1. Pi camera.
-
-Press Enter for the next test or type `q` to stop.
-
-### Expected I2C result
-
-Bus 1:
-
-```
-0x29 = VL53L0X
-0x68 = MPU-6050
-```
-
-Bus 3:
-
-```
-0x29 = TCS34725
-```
-
-### ESP32 bench test
-
-1. Upload the ESP32 firmware with motor power disconnected.
-
-1. Power the ESP32 from USB.
-
-1. Confirm its startup message.
-
-1. Check Pi-to-ESP32 UART wiring.
-
-1. Send `PING` and confirm `PONG`.
-
-1. Send a stop command.
-
-1. Lift the wheels off the floor.
-
-1. Connect one TB6612 channel.
-
-1. Test low-speed forward.
-
-1. Test low-speed reverse.
-
-1. Confirm the correct motor turns.
-
-1. Add the remaining motors one at a time.
-
-1. Add encoders after motor direction works.
-
-1. Confirm encoder counts change in the expected direction.
-
-### Stepper test
-
-1. Keep the drum unloaded.
-
-1. Test one direction.
-
-1. Test the reverse direction.
-
-1. Count steps for one exact compartment.
-
-1. Test a full four-slot rotation.
-
-1. Confirm the drum does not jam.
-
-1. Confirm coils are released after movement if required.
-
-### Servo test
-
-1. Connect only the signal wire first.
-
-1. Confirm the separate 5 V supply.
-
-1. Move one servo at a time.
-
-1. Start near the centre of its safe range.
-
-1. Stop before mechanical binding.
-
-1. Record safe angles.
-
-1. Test the two trapdoors together.
+1. Only then test an integrated movement.
 
 ---
 
-## 12. Calibration values still required
+## 11. Final unresolved confirmations
 
-Fill these only after physical measurement:
+Before autonomous operation, confirm:
 
-```python
-TOF_CLOSE_MM
-WHEEL_DIAMETER_MM
-ENCODER_COUNTS_PER_MM
-STEPPER_STEPS_PER_SLOT
-```
+- ESP32-S3 UART RX/TX pins.
 
-Servo values:
+- Encoder output voltage.
 
-```python
-ramp_up
-ramp_down
-sweeper_home
-sweeper_in
-trapdoor_closed
-trapdoor_open
-kit_closed
-kit_open
-```
+- Whether encoder pull-ups are already present.
 
-Also measure/confirm:
+- L298N `5V-EN`, `ENA`, and `ENB` jumper removal.
 
-- Motor polarity.
+- Motor polarity and physical motor order.
 
-- Encoder A/B polarity.
+- Buck-converter output under load.
 
-- Encoder counts per revolution.
+- L298N motor current and heat.
 
-- Actual wheel diameter under load.
+- Physical emergency stop.
 
-- Wheel spacing.
+- ToF and colour sensor response.
 
-- Motor speed versus PWM.
+- Camera patient-detection method.
 
-- Duration required for common route movements.
+- Servo angles.
 
-- ToF reading at the pickup distance.
+- Drum steps per slot.
 
-- IR active polarity and landmark behaviour.
+- Exact route timings and distances.
 
-- TCS colour readings for real red, yellow, green, white, and black surfaces.
-
-- Camera target-centering tolerance.
-
----
-
-## 13. Current unresolved hardware confirmations
-
-Before final autonomous operation, confirm:
-
-- Actual ESP32/PCB GPIO assignments from the Arduino wiring comments.
-
-- Which motor is Motor 1, 2, 3, and 4.
-
-- Whether Motors 1/2 are the left side and Motors 3/4 are the right side.
-
-- Whether both TB6612 `STBY` pins are connected to GPIO27 or tied to 3.3 V.
-
-- TB6612 logic voltage and motor supply voltage.
-
-- Encoder output voltage compatibility with ESP32 inputs.
-
-- Encoder A/B pin order.
-
-- External encoder pull-ups.
-
-- Physical emergency-stop arrangement.
-
-- Servo regulator current capacity.
-
-- Motor regulator current capacity.
-
-- Exact route timings/distances.
-
-- Final camera patient-detection method.
-
-- Final TCS34725 role and mounting position.
-
-> Do not treat the proposed ESP32 GPIO table as confirmed until it matches the actual PCB/Arduino wiring block.
-
----
-
-## 14. Software files
-
-| File | Purpose |
-| --- | --- |
-| `patient_pi_master.py` | Pi master state machine, sensors, servos, stepper, UART |
-| `patient_sensor_test.py` | Read-only interactive sensor tester |
-| `esp32_uart_motor_executor.ino` | ESP32 UART parser and timed motor executor |
-| `final_full_gpio_layout.md` | Pi-focused wiring reference |
-| `galileo_disk_detector_hardened.py` | Separate wall/disk robot vision module; not used by this robot |
-
-The ESP32 firmware should be updated only after the actual motor/encoder GPIO mapping is confirmed.
+The new wiring does **not** alter the Pi sensor/servo/stepper pin assignments. It replaces the old ESP32/TB6612 motor side with the ESP32-S3/L298N arrangement shown above.
